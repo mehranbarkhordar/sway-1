@@ -155,18 +155,31 @@ impl ReplaceSelfType for TypeId {
                     }
                 }
                 TypeInfo::Custom {
-                    call_path,
+                    qualified_call_path: call_path,
                     type_arguments,
                     root_type_id,
                 } => {
                     let mut need_to_create_new = false;
 
-                    let mut call_path = call_path;
+                    let mut qualified_call_path = call_path.clone();
                     let mut root_type_id = root_type_id;
-                    if !call_path.prefixes.is_empty() && call_path.prefixes[0].as_str() == "Self" {
+                    if qualified_call_path.qualified_path_root.is_none()
+                        && !qualified_call_path.call_path.prefixes.is_empty()
+                        && qualified_call_path.call_path.prefixes[0].as_str() == "Self"
+                    {
                         need_to_create_new = true;
-                        call_path.prefixes.remove(0);
+                        qualified_call_path.call_path.prefixes.remove(0);
                         root_type_id = Some(self_type);
+                    }
+
+                    if let Some(ref mut qualified_path_root) =
+                        qualified_call_path.qualified_path_root
+                    {
+                        if let Some(type_id) =
+                            helper(qualified_path_root.ty.type_id, engines, self_type)
+                        {
+                            qualified_path_root.ty.type_id = type_id;
+                        }
                     }
 
                     let type_arguments = type_arguments.map(|type_arguments| {
@@ -186,7 +199,7 @@ impl ReplaceSelfType for TypeId {
                         Some(type_engine.insert(
                             engines,
                             TypeInfo::Custom {
-                                call_path,
+                                qualified_call_path,
                                 type_arguments,
                                 root_type_id,
                             },
@@ -335,15 +348,27 @@ impl TypeId {
         resolved_type_id: TypeId,
     ) -> bool {
         match (type_engine.get(self), type_engine.get(resolved_type_id)) {
-            (TypeInfo::Custom { call_path, .. }, TypeInfo::Enum(decl_ref)) => {
-                call_path.suffix != decl_engine.get_enum(&decl_ref).call_path.suffix
-            }
-            (TypeInfo::Custom { call_path, .. }, TypeInfo::Struct(decl_ref)) => {
-                call_path.suffix != decl_engine.get_struct(&decl_ref).call_path.suffix
-            }
-            (TypeInfo::Custom { call_path, .. }, TypeInfo::Alias { name, .. }) => {
-                call_path.suffix != name
-            }
+            (
+                TypeInfo::Custom {
+                    qualified_call_path: call_path,
+                    ..
+                },
+                TypeInfo::Enum(decl_ref),
+            ) => call_path.call_path.suffix != decl_engine.get_enum(&decl_ref).call_path.suffix,
+            (
+                TypeInfo::Custom {
+                    qualified_call_path: call_path,
+                    ..
+                },
+                TypeInfo::Struct(decl_ref),
+            ) => call_path.call_path.suffix != decl_engine.get_struct(&decl_ref).call_path.suffix,
+            (
+                TypeInfo::Custom {
+                    qualified_call_path: call_path,
+                    ..
+                },
+                TypeInfo::Alias { name, .. },
+            ) => call_path.call_path.suffix != name,
             (TypeInfo::Custom { .. }, _) => true,
             _ => false,
         }

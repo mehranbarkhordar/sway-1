@@ -257,7 +257,13 @@ pub(crate) fn type_check_method_application(
         } => {
             let mut prefixes = call_path_binding.inner.prefixes;
             prefixes.push(match &call_path_binding.inner.suffix {
-                (TypeInfo::Custom { call_path, .. }, ..) => call_path.clone().suffix,
+                (
+                    TypeInfo::Custom {
+                        qualified_call_path: call_path,
+                        ..
+                    },
+                    ..,
+                ) => call_path.call_path.clone().suffix,
                 (_, ident) => ident.clone(),
             });
 
@@ -533,7 +539,7 @@ pub(crate) fn resolve_method_name(
                 ctx.self_type(),
                 ctx.type_annotation(),
                 &arguments,
-                Some(as_trait.clone()),
+                Some(*as_trait),
                 TryInsertingTraitImplOnFailure::Yes,
             )?;
 
